@@ -1,0 +1,13 @@
+services:
+  threatforge:
+    build: .
+    ports:
+      - "3100:3100"
+    volumes:
+      - threatforge-data:/app/data
+    env_file:
+      - .env
+    restart: unless-stopped
+
+volumes:
+  threatforge-data:
