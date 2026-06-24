@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Shield, CheckCircle, XCircle, Loader2 } from 'lucide-react';
+import { useToast } from '../lib/toast';
 
 export default function Settings() {
+  const { toastSuccess, toastError } = useToast();
   const [config, setConfig] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -49,9 +51,11 @@ export default function Settings() {
 
       setOpenaiKey('');
       setAnthropicKey('');
+      toastSuccess('Configuration saved');
       await fetchConfig();
     } catch (err) {
       console.error('Failed to save:', err);
+      toastError('Failed to save configuration');
     } finally {
       setSaving(false);
     }
@@ -64,8 +68,10 @@ export default function Settings() {
       const res = await fetch('/api/config/test', { method: 'POST' });
       const data = await res.json();
       setTestResult(data);
+      if (data.success) toastSuccess(`Connected to ${data.model?.model || 'provider'}`);
     } catch (err) {
       setTestResult({ success: false, error: err.message });
+      toastError('Connection test failed');
     } finally {
       setTesting(false);
     }

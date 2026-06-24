@@ -8,6 +8,7 @@ client/dist/
 
 # Data (persisted via Docker volume)
 server/data/
+server/data/.encryption_key
 
 # Environment
 .env
@@ -27,6 +28,10 @@ Thumbs.db
 # Git
 .git/
 .gitignore
+
+# Tests
+server/src/__tests__/
+vitest.config.js
 
 # Docs (not needed in image)
 review.md

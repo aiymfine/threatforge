@@ -1,19 +1,30 @@
 import { useState } from 'react';
 
-export default function ArchitectureForm({ onSubmit, loading }) {
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
-  const [components, setComponents] = useState([
-    { name: '', type: 'Web Application', technology: '', auth: '', encryption: '', notes: '' }
-  ]);
-  const [flows, setFlows] = useState([
-    { from: '', to: '', data: '', protocol: '', encryption: '', authentication: '' }
-  ]);
-  const [trustBoundaries, setTrustBoundaries] = useState([
-    { name: '', components: '' }
-  ]);
-  const [externals, setExternals] = useState([]);
-  const [context, setContext] = useState('');
+export default function ArchitectureForm({ onSubmit, loading, initialData, submitLabel }) {
+  const [name, setName] = useState(initialData?.name || '');
+  const [description, setDescription] = useState(initialData?.description || '');
+  const [components, setComponents] = useState(
+    initialData?.architecture?.components?.length > 0
+      ? initialData.architecture.components
+      : [{ name: '', type: 'Web Application', technology: '', auth: '', encryption: '', notes: '' }]
+  );
+  const [flows, setFlows] = useState(
+    initialData?.architecture?.flows?.length > 0
+      ? initialData.architecture.flows
+      : [{ from: '', to: '', data: '', protocol: '', encryption: '', authentication: '' }]
+  );
+  const [trustBoundaries, setTrustBoundaries] = useState(
+    initialData?.architecture?.trustBoundaries?.length > 0
+      ? initialData.architecture.trustBoundaries.map(b => ({
+          ...b,
+          components: Array.isArray(b.components) ? b.components.join(', ') : (b.components || '')
+        }))
+      : [{ name: '', components: '' }]
+  );
+  const [externals, setExternals] = useState(
+    initialData?.architecture?.externals || []
+  );
+  const [context, setContext] = useState(initialData?.architecture?.context || '');
 
   const addComponent = () => setComponents([...components, { name: '', type: 'Component', technology: '', auth: '', encryption: '', notes: '' }]);
   const removeComponent = (i) => setComponents(components.filter((_, idx) => idx !== i));
@@ -236,10 +247,10 @@ export default function ArchitectureForm({ onSubmit, loading }) {
           {loading ? (
             <>
               <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
-              Analyzing...
+              {submitLabel === 'Save Changes' ? 'Saving...' : 'Analyzing...'}
             </>
           ) : (
-            '🛡️ Analyze Threats'
+            submitLabel === 'Save Changes' ? '💾 Save Changes' : '🛡️ Analyze Threats'
           )}
         </button>
       </div>

@@ -3,9 +3,10 @@ const router = require('express').Router();
 
 // Get current config (masked sensitive values)
 router.get('/', (req, res) => {
+  // getAllSettings now returns decrypted sensitive fields
   const config = getAllSettings();
 
-  // Mask API keys
+  // Mask API keys for the response
   if (config.openai_api_key && config.openai_api_key.length > 8) {
     config.openai_api_key_masked = config.openai_api_key.slice(0, 8) + '••••••••';
   } else {

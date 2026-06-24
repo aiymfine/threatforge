@@ -1,9 +1,13 @@
 const fs = require('fs');
 const path = require('path');
+const { encrypt, decrypt } = require('../services/crypto');
 
 const DATA_DIR = process.env.DATA_DIR || './data';
 const DB_PATH = path.join(DATA_DIR, 'threatforge.json');
 const SETTINGS_PATH = path.join(DATA_DIR, 'settings.json');
+
+// Fields that should be encrypted at rest
+const ENCRYPTED_FIELDS = ['openai_api_key', 'anthropic_api_key'];
 
 // Allowed base URL hosts for LLM providers (blocks SSRF to internal networks)
 const ALLOWED_LOCALHOST_HOSTS = ['localhost', '127.0.0.1', '::1'];
@@ -52,21 +56,42 @@ function initDb() {
     };
     saveSettings();
   }
+
+  // Migrate: encrypt plaintext keys if not yet encrypted
+  if (!settings._keys_encrypted) {
+    for (const key of ENCRYPTED_FIELDS) {
+      if (settings[key] && typeof settings[key] === 'string' && settings[key].length > 0) {
+        // Only encrypt if it doesn't look like a base64 ciphertext
+        try {
+          const decoded = Buffer.from(settings[key], 'base64');
+          // If it's valid base64 and long enough, it might already be encrypted
+          if (decoded.length > 24) continue;
+        } catch {
+          // Not valid base64 — this is plaintext, encrypt it
+        }
+        settings[key] = encrypt(settings[key]);
+      }
+    }
+    settings._keys_encrypted = true;
+    saveSettings();
+  }
 }
 
-// Note: writeFileSync is synchronous and Node.js is single-threaded for JS execution,
-// so concurrent writes to the same file won't interleave. A write queue is not needed
-// for the current sync implementation. If migrated to async writes, add a mutex.
+// Atomic write: write to temp file then rename to prevent corruption on crash
+function atomicWrite(filePath, data) {
+  const dir = path.resolve(DATA_DIR);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  const tmpPath = filePath + '.tmp';
+  fs.writeFileSync(tmpPath, data);
+  fs.renameSync(tmpPath, filePath);
+}
+
 function saveProjects() {
-  const fullPath = path.resolve(DATA_DIR);
-  if (!fs.existsSync(fullPath)) fs.mkdirSync(fullPath, { recursive: true });
-  fs.writeFileSync(DB_PATH, JSON.stringify(projects, null, 2));
+  atomicWrite(DB_PATH, JSON.stringify(projects, null, 2));
 }
 
 function saveSettings() {
-  const fullPath = path.resolve(DATA_DIR);
-  if (!fs.existsSync(fullPath)) fs.mkdirSync(fullPath, { recursive: true });
-  fs.writeFileSync(SETTINGS_PATH, JSON.stringify(settings, null, 2));
+  atomicWrite(SETTINGS_PATH, JSON.stringify(settings, null, 2));
 }
 
 // Project helpers
@@ -124,23 +149,44 @@ function deleteProject(id) {
   return true;
 }
 
-// Settings helpers
+// Settings helpers — transparently encrypt/decrypt sensitive fields
 function getSetting(key) {
-  return settings[key] ?? null;
+  const raw = settings[key] ?? null;
+  if (raw && ENCRYPTED_FIELDS.includes(key)) {
+    return decrypt(raw);
+  }
+  return raw;
 }
 
 function setSetting(key, value) {
-  settings[key] = value;
+  if (value && ENCRYPTED_FIELDS.includes(key)) {
+    settings[key] = encrypt(value);
+  } else {
+    settings[key] = value;
+  }
   saveSettings();
 }
 
 function getAllSettings() {
-  return { ...settings };
+  const result = { ...settings };
+  // Decrypt sensitive fields for the caller
+  for (const key of ENCRYPTED_FIELDS) {
+    if (result[key]) {
+      result[key] = decrypt(result[key]);
+    }
+  }
+  // Remove internal metadata
+  delete result._keys_encrypted;
+  return result;
 }
 
 function updateSettings(updates) {
   for (const [key, value] of Object.entries(updates)) {
-    settings[key] = value;
+    if (value && ENCRYPTED_FIELDS.includes(key)) {
+      settings[key] = encrypt(value);
+    } else {
+      settings[key] = value;
+    }
   }
   saveSettings();
 }
@@ -151,7 +197,6 @@ function isExternalUrl(url) {
     const parsed = new URL(url);
     if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return false;
     const host = parsed.hostname;
-    // Block private IPs, localhost, and link-local addresses
     if (ALLOWED_LOCALHOST_HOSTS.includes(host)) return false;
     if (PRIVATE_IP_PATTERN.test(host)) return false;
     return true;

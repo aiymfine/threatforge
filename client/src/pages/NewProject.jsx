@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useToast } from '../lib/toast';
 import ArchitectureForm from '../components/ArchitectureForm';
 
 export default function NewProject() {
   const navigate = useNavigate();
+  const { toastError } = useToast();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -41,6 +43,7 @@ export default function NewProject() {
       navigate(`/project/${project.id}`);
     } catch (err) {
       setError(err.message);
+      toastError(err.message);
     } finally {
       setLoading(false);
     }

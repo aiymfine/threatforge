@@ -1,12 +1,15 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, RefreshCw, Download, ChevronDown, ChevronUp, AlertTriangle, Shield, Search } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Download, FileText, Edit3, ChevronDown, ChevronUp, AlertTriangle, Shield, Search } from 'lucide-react';
 import { SeverityBadge, CategoryBadge } from '../components/Badges';
+import { useToast } from '../lib/toast';
+import { generateHTMLReport } from '../lib/reportGenerator';
 
 const strideCategories = ['Spoofing', 'Tampering', 'Repudiation', 'Information Disclosure', 'Denial of Service', 'Elevation of Privilege'];
 
 export default function ProjectView() {
   const { id } = useParams();
+  const { toastSuccess, toastError } = useToast();
   const [project, setProject] = useState(null);
   const [loading, setLoading] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
@@ -46,8 +49,10 @@ export default function ProjectView() {
       }
       const data = await res.json();
       setProject(data);
+      toastSuccess(`Analysis complete — ${data.threats?.length || 0} threats identified`);
     } catch (err) {
       setError(err.message);
+      toastError('Analysis failed');
     } finally {
       setAnalyzing(false);
     }
@@ -94,6 +99,20 @@ export default function ProjectView() {
     a.download = `${project.name.replace(/\s+/g, '-').toLowerCase()}-threat-model.json`;
     a.click();
     URL.revokeObjectURL(url);
+    toastSuccess('JSON exported');
+  };
+
+  const exportReport = () => {
+    if (!project) return;
+    const html = generateHTMLReport(project);
+    const blob = new Blob([html], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${project.name.replace(/\s+/g, '-').toLowerCase()}-threat-report.html`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toastSuccess('Report exported — open in browser and use Ctrl+P to save as PDF');
   };
 
   if (loading) {
@@ -132,8 +151,17 @@ export default function ProjectView() {
           {project.description && <p className="text-gray-400 text-sm mt-1">{project.description}</p>}
         </div>
         <div className="flex items-center gap-2">
+          <Link
+            to={`/project/${id}/edit`}
+            className="flex items-center gap-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-1.5 rounded-lg text-sm transition"
+          >
+            <Edit3 className="w-3.5 h-3.5" /> Edit
+          </Link>
+          <button onClick={exportReport} className="flex items-center gap-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-1.5 rounded-lg text-sm transition">
+            <FileText className="w-3.5 h-3.5" /> Report
+          </button>
           <button onClick={exportJSON} className="flex items-center gap-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-1.5 rounded-lg text-sm transition">
-            <Download className="w-3.5 h-3.5" /> Export
+            <Download className="w-3.5 h-3.5" /> JSON
           </button>
           <button onClick={reAnalyze} disabled={analyzing} className="flex items-center gap-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 disabled:opacity-50 px-3 py-1.5 rounded-lg text-sm transition">
             <RefreshCw className={`w-3.5 h-3.5 ${analyzing ? 'animate-spin' : ''}`} /> Re-analyze
