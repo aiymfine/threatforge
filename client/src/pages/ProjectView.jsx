@@ -35,6 +35,7 @@ export default function ProjectView() {
   };
 
   const reAnalyze = async () => {
+    if (!confirm('This will replace all current threats with a new analysis. Continue?')) return;
     setAnalyzing(true);
     setError('');
     try {
@@ -232,7 +233,16 @@ export default function ProjectView() {
 
       {/* Threat List */}
       {!project.threats || project.threats.length === 0 ? (
-        <div className="bg-gray-900 rounded-xl border border-gray-800 border-dashed p-12 text-center">
+        <div className="relative bg-gray-900 rounded-xl border border-gray-800 border-dashed p-12 text-center">
+          {analyzing && (
+            <div className="absolute inset-0 bg-gray-950/80 backdrop-blur-sm flex items-center justify-center z-10 rounded-xl">
+              <div className="text-center">
+                <RefreshCw className="w-8 h-8 text-red-400 animate-spin mx-auto mb-3" />
+                <p className="text-white font-medium">Analyzing architecture...</p>
+                <p className="text-gray-400 text-sm mt-1">This may take 10–30 seconds</p>
+              </div>
+            </div>
+          )}
           <Shield className="w-10 h-10 text-gray-600 mx-auto mb-3" />
           <p className="text-gray-400">No threats analyzed yet</p>
           <p className="text-gray-500 text-sm mt-1">Click "Re-analyze" to generate threat model</p>
@@ -242,7 +252,16 @@ export default function ProjectView() {
           <p className="text-gray-500">No threats match your filters</p>
         </div>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-2 relative">
+          {analyzing && (
+            <div className="absolute inset-0 bg-gray-950/80 backdrop-blur-sm flex items-center justify-center z-10 rounded-xl">
+              <div className="text-center">
+                <RefreshCw className="w-8 h-8 text-red-400 animate-spin mx-auto mb-3" />
+                <p className="text-white font-medium">Re-analyzing architecture...</p>
+                <p className="text-gray-400 text-sm mt-1">This may take 10–30 seconds</p>
+              </div>
+            </div>
+          )}
           {filteredThreats.map((threat) => (
             <div key={threat.id} className="bg-gray-900 rounded-xl border border-gray-800 hover:border-gray-700 transition overflow-hidden">
               <button

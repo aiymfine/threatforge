@@ -52,6 +52,23 @@ Open http://localhost:5173 (dev) or http://localhost:3100 (production)
 
 ## Configuration
 
+### Security
+
+ThreatForge supports optional API authentication via `TF_ADMIN_KEY`:
+
+```bash
+# In .env
+TF_ADMIN_KEY=your-secret-key-here
+```
+
+When set, all API routes require `Authorization: Bearer <key>`. The frontend will prompt for the key on first access. The health check endpoint (`/api/health`) remains accessible without auth for monitoring.
+
+**Additional security features:**
+- Rate limiting on analysis endpoints (30 requests/hour)
+- SSRF protection on LLM base URLs (blocks internal/private IPs)
+- Input validation with size limits
+- CORS configurable via `CORS_ORIGIN` env var
+
 ### LLM Provider
 
 ThreatForge supports three providers:
@@ -77,7 +94,7 @@ See [.env.example](.env.example) for all options.
 
 ## Tech Stack
 
-- **Backend:** Node.js + Express + better-sqlite3
+- **Backend:** Node.js + Express + JSON file storage
 - **Frontend:** React + Vite + Tailwind CSS
 - **AI:** OpenAI / Anthropic / Ollama
 - **Containerization:** Docker + Docker Compose

@@ -13,7 +13,7 @@ async function generateThreatModel(architecture, description = '', overrides = {
   try {
     parsed = JSON.parse(raw);
   } catch (e) {
-    // Try to extract JSON from response
+    // Try to extract JSON from response (LLMs sometimes wrap in markdown code blocks)
     const jsonMatch = raw.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       parsed = JSON.parse(jsonMatch[0]);
@@ -25,23 +25,28 @@ async function generateThreatModel(architecture, description = '', overrides = {
   const threats = parsed.threats || [];
 
   // Validate and normalize each threat
-  return threats.map((threat, index) => ({
-    id: `T-${String(index + 1).padStart(3, '0')}`,
-    title: threat.title || threat.name || `Threat ${index + 1}`,
-    description: threat.description || '',
-    category: normalizeCategory(threat.category || threat.stride),
-    target: threat.target || threat.component || '',
-    likelihood: clamp(threat.likelihood || 3, 1, 5),
-    impact: clamp(threat.impact || 3, 1, 5),
-    severity: clamp(
-      threat.severity || (threat.likelihood || 3) * (threat.impact || 3),
-      1, 25
-    ),
-    mitigation: threat.mitigation || threat.remediation || '',
-    cwe: threat.cwe || threat.cwe_id || null,
-    owasp: threat.owasp || null,
-    examples: threat.examples || []
-  })).sort((a, b) => b.severity - a.severity);
+  return threats.map((threat, index) => {
+    // Always compute severity as Likelihood × Impact for consistency
+    const likelihood = clamp(threat.likelihood || 3, 1, 5);
+    const impact = clamp(threat.impact || 3, 1, 5);
+
+    return {
+      id: `T-${String(index + 1).padStart(3, '0')}`,
+      title: String(threat.title || threat.name || `Threat ${index + 1}`).slice(0, 200),
+      description: String(threat.description || '').slice(0, 5000),
+      category: normalizeCategory(threat.category || threat.stride),
+      target: String(threat.target || threat.component || '').slice(0, 200),
+      likelihood,
+      impact,
+      severity: likelihood * impact, // Deterministic: L × I
+      mitigation: String(threat.mitigation || threat.remediation || '').slice(0, 5000),
+      cwe: threat.cwe || threat.cwe_id || null,
+      owasp: threat.owasp || null,
+      examples: Array.isArray(threat.examples)
+        ? threat.examples.map(ex => String(ex).slice(0, 500))
+        : []
+    };
+  }).sort((a, b) => b.severity - a.severity);
 }
 
 function normalizeCategory(cat) {
@@ -62,7 +67,7 @@ function normalizeCategory(cat) {
     'D': 'Denial of Service',
     'E': 'Elevation of Privilege'
   };
-  return mapping[cat] || cat;
+  return mapping[cat] || String(cat);
 }
 
 function clamp(val, min, max) {

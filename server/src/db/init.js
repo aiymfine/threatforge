@@ -5,6 +5,10 @@ const DATA_DIR = process.env.DATA_DIR || './data';
 const DB_PATH = path.join(DATA_DIR, 'threatforge.json');
 const SETTINGS_PATH = path.join(DATA_DIR, 'settings.json');
 
+// Allowed base URL hosts for LLM providers (blocks SSRF to internal networks)
+const ALLOWED_LOCALHOST_HOSTS = ['localhost', '127.0.0.1', '::1'];
+const PRIVATE_IP_PATTERN = /^(10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.|169\.254)/;
+
 let projects = [];
 let settings = {};
 
@@ -18,6 +22,7 @@ function initDb() {
   if (fs.existsSync(DB_PATH)) {
     try {
       projects = JSON.parse(fs.readFileSync(DB_PATH, 'utf-8'));
+      if (!Array.isArray(projects)) projects = [];
     } catch {
       projects = [];
     }
@@ -27,6 +32,7 @@ function initDb() {
   if (fs.existsSync(SETTINGS_PATH)) {
     try {
       settings = JSON.parse(fs.readFileSync(SETTINGS_PATH, 'utf-8'));
+      if (typeof settings !== 'object' || settings === null) settings = {};
     } catch {
       settings = {};
     }
@@ -48,6 +54,9 @@ function initDb() {
   }
 }
 
+// Note: writeFileSync is synchronous and Node.js is single-threaded for JS execution,
+// so concurrent writes to the same file won't interleave. A write queue is not needed
+// for the current sync implementation. If migrated to async writes, add a mutex.
 function saveProjects() {
   const fullPath = path.resolve(DATA_DIR);
   if (!fs.existsSync(fullPath)) fs.mkdirSync(fullPath, { recursive: true });
@@ -62,6 +71,7 @@ function saveSettings() {
 
 // Project helpers
 function findProject(id) {
+  if (!id || typeof id !== 'string') return null;
   return projects.find(p => p.id === id) || null;
 }
 
@@ -135,7 +145,33 @@ function updateSettings(updates) {
   saveSettings();
 }
 
+// URL validation (SSRF protection)
+function isExternalUrl(url) {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return false;
+    const host = parsed.hostname;
+    // Block private IPs, localhost, and link-local addresses
+    if (ALLOWED_LOCALHOST_HOSTS.includes(host)) return false;
+    if (PRIVATE_IP_PATTERN.test(host)) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function isLocalUrl(url) {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'http:') return false;
+    return ALLOWED_LOCALHOST_HOSTS.includes(parsed.hostname);
+  } catch {
+    return false;
+  }
+}
+
 module.exports = {
   initDb, findProject, getAllProjects, createProject, updateProject, deleteProject,
-  getSetting, setSetting, getAllSettings, updateSettings
+  getSetting, setSetting, getAllSettings, updateSettings,
+  isExternalUrl, isLocalUrl
 };

@@ -1,5 +1,6 @@
+const crypto = require('crypto');
 const { getAllProjects, findProject, createProject, updateProject, deleteProject } = require('../db/init');
-const { v4: uuid } = require('uuid');
+const { validateProjectName, validateArchitecture } = require('../middleware/validate');
 
 const router = require('express').Router();
 
@@ -23,14 +24,22 @@ router.get('/:id', (req, res) => {
 router.post('/', (req, res) => {
   const { name, description = '', architecture = {} } = req.body;
 
-  if (!name || typeof name !== 'string') {
-    return res.status(400).json({ error: 'Project name is required' });
+  // Validate project name
+  const nameError = validateProjectName(name);
+  if (nameError) return res.status(400).json({ error: nameError });
+
+  // Validate architecture if provided
+  if (architecture && Object.keys(architecture).length > 0) {
+    const errors = validateArchitecture(architecture);
+    if (errors.length > 0) {
+      return res.status(400).json({ error: errors[0], details: errors });
+    }
   }
 
   const project = createProject({
-    id: uuid(),
-    name,
-    description,
+    id: crypto.randomUUID(),
+    name: name.trim(),
+    description: typeof description === 'string' ? description.trim().slice(0, 5000) : '',
     architecture
   });
 
@@ -43,9 +52,23 @@ router.put('/:id', (req, res) => {
   if (!existing) return res.status(404).json({ error: 'Project not found' });
 
   const updates = {};
-  if (req.body.name !== undefined) updates.name = req.body.name;
-  if (req.body.description !== undefined) updates.description = req.body.description;
-  if (req.body.architecture !== undefined) updates.architecture = req.body.architecture;
+  if (req.body.name !== undefined) {
+    const nameError = validateProjectName(req.body.name);
+    if (nameError) return res.status(400).json({ error: nameError });
+    updates.name = req.body.name.trim();
+  }
+  if (req.body.description !== undefined) {
+    updates.description = typeof req.body.description === 'string'
+      ? req.body.description.trim().slice(0, 5000)
+      : '';
+  }
+  if (req.body.architecture !== undefined) {
+    const errors = validateArchitecture(req.body.architecture);
+    if (errors.length > 0) {
+      return res.status(400).json({ error: errors[0], details: errors });
+    }
+    updates.architecture = req.body.architecture;
+  }
 
   if (Object.keys(updates).length === 0) {
     return res.status(400).json({ error: 'Nothing to update' });

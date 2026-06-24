@@ -1,18 +1,21 @@
 const { findProject, updateProject } = require('../db/init');
 const { generateThreatModel } = require('../services/threatEngine');
+const { validateArchitecture } = require('../middleware/validate');
 const router = require('express').Router();
 
 // One-off analysis (no project save)
 router.post('/', async (req, res) => {
-  const { architecture, description = '', provider, model } = req.body;
+  const { architecture, description = '' } = req.body;
 
-  if (!architecture || !architecture.components || architecture.components.length === 0) {
-    return res.status(400).json({ error: 'Architecture with at least one component is required' });
+  // Input validation
+  const errors = validateArchitecture(architecture);
+  if (errors.length > 0) {
+    return res.status(400).json({ error: errors[0], details: errors });
   }
 
   try {
     const startTime = Date.now();
-    const threats = await generateThreatModel(architecture, description, { provider, model });
+    const threats = await generateThreatModel(architecture, description, {});
     const elapsed = Date.now() - startTime;
 
     const stats = {
@@ -34,7 +37,7 @@ router.post('/', async (req, res) => {
     res.json({ threats, stats, analysisTimeMs: elapsed });
   } catch (err) {
     console.error('Analysis failed:', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Analysis failed', details: err.message });
   }
 });
 
@@ -43,10 +46,15 @@ router.post('/project/:id', async (req, res) => {
   const project = findProject(req.params.id);
   if (!project) return res.status(404).json({ error: 'Project not found' });
 
-  const architecture = typeof project.architecture === 'string' ? JSON.parse(project.architecture) : (project.architecture || {});
+  // Parse architecture (might be stored as string)
+  const architecture = typeof project.architecture === 'string'
+    ? JSON.parse(project.architecture)
+    : (project.architecture || {});
 
-  if (!architecture.components || architecture.components.length === 0) {
-    return res.status(400).json({ error: 'Architecture has no components defined' });
+  // Input validation
+  const errors = validateArchitecture(architecture);
+  if (errors.length > 0) {
+    return res.status(400).json({ error: errors[0], details: errors });
   }
 
   try {
@@ -63,7 +71,7 @@ router.post('/project/:id', async (req, res) => {
     res.json({ ...updated, analysisTimeMs: elapsed });
   } catch (err) {
     console.error('Analysis failed:', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Analysis failed', details: err.message });
   }
 });
 

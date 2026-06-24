@@ -1,4 +1,4 @@
-const { getAllSettings, updateSettings, getSetting } = require('../db/init');
+const { getAllSettings, updateSettings, isExternalUrl, isLocalUrl } = require('../db/init');
 const router = require('express').Router();
 
 // Get current config (masked sensitive values)
@@ -36,6 +36,24 @@ router.put('/', (req, res) => {
   for (const [key, value] of Object.entries(req.body)) {
     if (!allowedKeys.includes(key)) continue;
     if (typeof value !== 'string') continue;
+
+    // SSRF protection: validate URLs before saving
+    if (key === 'openai_base_url' && value) {
+      if (!isExternalUrl(value)) {
+        return res.status(400).json({ error: 'OpenAI base URL must be a public HTTPS endpoint' });
+      }
+    }
+    if (key === 'ollama_base_url' && value) {
+      if (!isLocalUrl(value)) {
+        return res.status(400).json({ error: 'Ollama base URL must be a local address (localhost/127.0.0.1)' });
+      }
+    }
+
+    // Validate provider value
+    if (key === 'llm_provider' && !['openai', 'anthropic', 'ollama'].includes(value)) {
+      return res.status(400).json({ error: 'Invalid LLM provider. Must be: openai, anthropic, or ollama' });
+    }
+
     updates[key] = value;
   }
 

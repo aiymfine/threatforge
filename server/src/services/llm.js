@@ -1,26 +1,28 @@
-const { getSetting } = require('../db/init');
+const { getSetting, isExternalUrl, isLocalUrl } = require('../db/init');
 
 async function getLLMClient() {
   const provider = getSetting('llm_provider') || 'openai';
 
-  if (provider === 'ollama') {
-    return createOllamaClient();
-  }
-
-  if (provider === 'anthropic') {
-    return createAnthropicClient();
-  }
-
+  if (provider === 'ollama') return createOllamaClient();
+  if (provider === 'anthropic') return createAnthropicClient();
   return createOpenAIClient();
 }
 
 // ── OpenAI (and compatible) ──────────────────────────────
 function createOpenAIClient() {
   const apiKey = getSetting('openai_api_key');
-  const baseUrl = getSetting('openai_base_url') || 'https://api.openai.com/v1';
+  let baseUrl = getSetting('openai_base_url') || 'https://api.openai.com/v1';
   const model = getSetting('openai_model') || 'gpt-4o-mini';
 
   if (!apiKey) throw new Error('OpenAI API key not configured');
+
+  // SSRF protection: validate base URL points to a public endpoint
+  if (!isExternalUrl(baseUrl)) {
+    throw new Error('OpenAI base URL must be a public HTTPS endpoint (no internal/localhost addresses)');
+  }
+
+  // Normalize trailing slash
+  if (!baseUrl.endsWith('/')) baseUrl += '/';
 
   const OpenAI = require('openai');
   const client = new OpenAI({ apiKey, baseURL: baseUrl });
@@ -57,6 +59,8 @@ function createAnthropicClient() {
   const model = getSetting('anthropic_model') || 'claude-sonnet-4-20250514';
 
   if (!apiKey) throw new Error('Anthropic API key not configured');
+
+  // Anthropic URL is hardcoded to the public API — no SSRF risk
 
   return {
     provider: 'anthropic',
@@ -112,6 +116,11 @@ function createOllamaClient() {
   const baseUrl = getSetting('ollama_base_url') || 'http://localhost:11434';
   const model = getSetting('ollama_model') || 'llama3.1';
 
+  // SSRF protection: Ollama must be on localhost only
+  if (!isLocalUrl(baseUrl)) {
+    throw new Error('Ollama base URL must be a local address (localhost/127.0.0.1)');
+  }
+
   return {
     provider: 'ollama',
     model,
@@ -145,4 +154,4 @@ function createOllamaClient() {
   };
 }
 
-module.exports = { getLLMClient, getSetting };
+module.exports = { getLLMClient };
