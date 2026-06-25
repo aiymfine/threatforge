@@ -2,6 +2,7 @@ require('dotenv').config();
 
 const express = require('express');
 const cors = require('cors');
+const fs = require('fs');
 const path = require('path');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
@@ -56,10 +57,21 @@ app.use('/api', (req, res) => {
 
 // Serve static frontend in production
 if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(path.join(__dirname, '../../client/dist')));
-  app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '../../client/dist/index.html'));
-  });
+  // In Docker: /app/dist (Dockerfile copies client/dist to /app/dist)
+  // Locally: would need to run `npm run build` in client/ first
+  const candidatePaths = [
+    path.resolve(__dirname, '../dist'),          // Docker: /app/dist
+    path.resolve(__dirname, '../../client/dist'), // Local: server/src → server → client/dist
+  ];
+  const distPath = candidatePaths.find(p => fs.existsSync(path.join(p, 'index.html')));
+  if (distPath) {
+    app.use(express.static(distPath));
+    app.get('*', (req, res) => {
+      res.sendFile(path.join(distPath, 'index.html'));
+    });
+  } else {
+    console.warn('⚠️  No dist/ directory found — frontend will not be served');
+  }
 }
 
 // Start
